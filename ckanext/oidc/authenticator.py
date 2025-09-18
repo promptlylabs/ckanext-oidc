@@ -26,8 +26,9 @@ class OIDCAuthenticator:
         self.groups_claim = get_oidc_config('groups_claim', 'groups')
         self.sysadmin_groups = get_oidc_config('sysadmin_groups', '').split(',')
         self.default_organization = get_oidc_config('default_organization')
+        # Default to False for security - require explicit enabling
         self.auto_provision_users = toolkit.asbool(
-            get_oidc_config('auto_provision_users', True)
+            get_oidc_config('auto_provision_users', False)
         )
 
     def provision_user(self, claims: Dict[str, Any], access_token: Optional[str] = None) -> Optional[model.User]:
@@ -168,8 +169,11 @@ class OIDCAuthenticator:
 
             return user
 
+        except toolkit.ValidationError as e:
+            log.exception(f"Validation error creating user {username}: {e}")
+            return None
         except Exception as e:
-            log.error(f"Failed to create user {username}: {e}")
+            log.exception(f"Unexpected error creating user {username}: {e}")
             return None
 
     def _update_user(self, user: model.User, email: str, fullname: str, groups: List[str]) -> model.User:
@@ -204,8 +208,11 @@ class OIDCAuthenticator:
 
             return user
 
+        except toolkit.ValidationError as e:
+            log.exception(f"Validation error updating user {user.name}: {e}")
+            return user
         except Exception as e:
-            log.error(f"Failed to update user {user.name}: {e}")
+            log.exception(f"Unexpected error updating user {user.name}: {e}")
             return user
 
     def _process_group_memberships(self, user: model.User, groups: List[str]) -> None:
@@ -278,8 +285,11 @@ class OIDCAuthenticator:
                 except toolkit.ObjectNotFound:
                     log.warning(f"Default organization {self.default_organization} not found")
 
+        except (toolkit.ObjectNotFound, toolkit.ValidationError) as e:
+            log.exception(f"Error processing group memberships for user {user.name}: {e}")
         except Exception as e:
-            log.error(f"Failed to process group memberships for user {user.name}: {e}")
+            log.exception(f"Unexpected error processing group memberships for user {user.name}: {e}")
+            raise
 
     def _update_sysadmin_status(self, user: model.User, groups: List[str]) -> None:
         """
@@ -311,4 +321,5 @@ class OIDCAuthenticator:
                     log.info(f"Revoked sysadmin rights from user: {user.name}")
 
         except Exception as e:
-            log.error(f"Failed to update sysadmin status for user {user.name}: {e}")
+            log.exception(f"Failed to update sysadmin status for user {user.name}: {e}")
+            raise
