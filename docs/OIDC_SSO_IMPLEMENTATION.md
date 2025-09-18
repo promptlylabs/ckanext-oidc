@@ -122,8 +122,9 @@ CKAN__CKANEXT__OIDC__BUTTON_POSITION=top
 | `groups_claim` | `groups` | Claim containing user groups/roles |
 | `sysadmin_groups` | - | Comma-separated list of groups that grant sysadmin rights |
 | `default_organization` | - | Default organization for new users |
-| `auto_provision_users` | `true` | Automatically create new users |
+| `auto_provision_users` | `false` | Automatically create new users (⚠️ Security: Enable only if needed) |
 | `auto_create_organizations` | `false` | Auto-create organizations from groups |
+| `revoke_sysadmin_on_missing_group` | `false` | Revoke sysadmin rights when user removed from admin groups |
 | `allow_local_login` | `true` | Allow traditional CKAN login alongside SSO |
 | `button_text` | `Sign in with SSO` | Text displayed on SSO button |
 | `button_icon` | `fa-sign-in-alt` | FontAwesome icon for SSO button |
@@ -206,6 +207,12 @@ Users' Keycloak groups are mapped to CKAN organizations:
 - ID tokens are cryptographically verified
 - Signature validation using Keycloak's public keys
 - Expiration and issuer validation
+
+### User Provisioning Security
+- **Auto-provisioning is disabled by default** for security
+- When disabled, users must be pre-created in CKAN with proper permissions
+- Enable auto-provisioning only in trusted environments
+- Group-based sysadmin grants require explicit configuration
 
 ### SSL/TLS
 - HTTPS enforced for production deployments
