@@ -31,7 +31,9 @@ setup(
     zip_safe=False,
     install_requires=[
         'authlib>=1.2.0',
-        'requests>=2.25.0',
+        'pyjwt>=2.8.0',
+        'cryptography>=41.0.0',
+        'requests>=2.31.0',
     ],
     entry_points='''
         [ckan.plugins]
