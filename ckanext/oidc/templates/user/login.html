@@ -1,0 +1,42 @@
+{% ckan_extends %}
+
+{% block form %}
+  {% if h.oidc_is_enabled() %}
+    {% set button_position = h.oidc_button_position() %}
+    {% set allow_local = h.oidc_allow_local_login() %}
+
+    {# Show SSO button at top if configured #}
+    {% if button_position == 'top' or button_position == 'only' %}
+      {% include 'oidc/login_button.html' %}
+
+      {% if button_position != 'only' and allow_local %}
+        <div class="login-separator">
+          <hr class="mt-4 mb-3">
+          <div class="text-center text-muted mb-3">
+            {{ _('Or sign in with your CKAN account') }}
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {# Show traditional login form if not SSO-only #}
+    {% if button_position != 'only' and allow_local %}
+      {{ super() }}
+    {% endif %}
+
+    {# Show SSO button at bottom if configured #}
+    {% if button_position == 'bottom' and allow_local %}
+      <div class="login-separator">
+        <hr class="mt-4 mb-3">
+        <div class="text-center text-muted mb-3">
+          {{ _('Or') }}
+        </div>
+      </div>
+      {% include 'oidc/login_button.html' %}
+    {% endif %}
+
+  {% else %}
+    {# Fallback to standard login if OIDC disabled #}
+    {{ super() }}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,5 @@
+include README.md
+recursive-include ckanext/oidc *.html *.json *.js *.css *.png *.gif *.jpg *.ico *.svg
+recursive-include ckanext/oidc/templates *
+recursive-include ckanext/oidc/public *
+recursive-include ckanext/oidc/assets *
