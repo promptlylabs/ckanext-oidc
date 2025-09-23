@@ -170,10 +170,10 @@ class OIDCAuthenticator:
             return user
 
         except toolkit.ValidationError as e:
-            log.exception("Validation error creating user %s: %s", username, e)
+            log.exception("Validation error creating user %s", username)
             return None
         except Exception as e:
-            log.exception("Unexpected error creating user %s: %s", username, e)
+            log.exception("Unexpected error creating user %s", username)
             return None
 
     def _update_user(self, user: model.User, email: str, fullname: str, groups: List[str]) -> model.User:
@@ -209,10 +209,10 @@ class OIDCAuthenticator:
             return user
 
         except toolkit.ValidationError as e:
-            log.exception("Validation error updating user %s: %s", user.name, e)
+            log.exception("Validation error updating user %s", user.name)
             return user
         except Exception as e:
-            log.exception("Unexpected error updating user %s: %s", user.name, e)
+            log.exception("Unexpected error updating user %s", user.name)
             return user
 
     def _process_group_memberships(self, user: model.User, groups: List[str]) -> None:
@@ -286,9 +286,9 @@ class OIDCAuthenticator:
                     log.warning("Default organization %s not found", self.default_organization)
 
         except (toolkit.ObjectNotFound, toolkit.ValidationError) as e:
-            log.exception("Error processing group memberships for user %s: %s", user.name, e)
+            log.exception("Error processing group memberships for user %s", user.name)
         except Exception as e:
-            log.exception("Unexpected error processing group memberships for user %s: %s", user.name, e)
+            log.exception("Unexpected error processing group memberships for user %s", user.name)
             raise
 
     def _update_sysadmin_status(self, user: model.User, groups: List[str]) -> None:
@@ -321,5 +321,5 @@ class OIDCAuthenticator:
                     log.info("Revoked sysadmin rights from user: %s", user.name)
 
         except Exception as e:
-            log.exception("Failed to update sysadmin status for user %s: %s", user.name, e)
+            log.exception("Failed to update sysadmin status for user %s", user.name)
             raise
