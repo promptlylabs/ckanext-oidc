@@ -74,7 +74,7 @@ class OIDCClient:
 
         authorization_url = f"{self.endpoints['authorization']}?{urlencode(params)}"
 
-        log.debug(f"Generated authorization URL: {authorization_url}")
+        log.debug("Generated authorization URL: %s", authorization_url)
         return authorization_url, state
 
     def exchange_code_for_tokens(self, code: str, state: str) -> Dict[str, Any]:
@@ -113,7 +113,7 @@ class OIDCClient:
             return tokens
 
         except requests.RequestException as e:
-            log.error(f"Failed to exchange code for tokens: {e}")
+            log.error("Failed to exchange code for tokens: %s", e)
             raise
 
     def get_user_info(self, access_token: str) -> Dict[str, Any]:
@@ -142,11 +142,11 @@ class OIDCClient:
             response.raise_for_status()
             user_info = response.json()
 
-            log.debug(f"Retrieved user info for: {user_info.get('preferred_username', 'unknown')}")
+            log.debug("Retrieved user info for: %s", user_info.get('preferred_username', 'unknown'))
             return user_info
 
         except requests.RequestException as e:
-            log.error(f"Failed to get user info: {e}")
+            log.error("Failed to get user info: %s", e)
             raise
 
     def decode_id_token(self, id_token: str, nonce: Optional[str] = None) -> Dict[str, Any]:
@@ -176,11 +176,11 @@ class OIDCClient:
             if nonce and claims.get('nonce') != nonce:
                 raise ValueError("Nonce mismatch")
 
-            log.debug(f"Successfully validated ID token for sub: {claims['sub']}")
+            log.debug("Successfully validated ID token for sub: %s", claims['sub'])
             return claims
 
         except JoseError as e:
-            log.error(f"Failed to decode ID token: {e}")
+            log.error("Failed to decode ID token: %s", e)
             raise
 
     def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
@@ -216,7 +216,7 @@ class OIDCClient:
             return tokens
 
         except requests.RequestException as e:
-            log.error(f"Failed to refresh token: {e}")
+            log.error("Failed to refresh token: %s", e)
             raise
 
     def logout(self, id_token: str, post_logout_redirect_uri: str) -> str:
@@ -237,8 +237,8 @@ class OIDCClient:
             'post_logout_redirect_uri': post_logout_redirect_uri,
         }
 
-        logout_url = f"{logout_endpoint}?{urlencode(params)}"
-        log.debug(f"Generated logout URL: {logout_url}")
+        logout_url = "%s?%s" % (logout_endpoint, urlencode(params))
+        log.debug("Generated logout URL: %s", logout_url)
         return logout_url
 
     def _get_jwks(self) -> Dict:
@@ -264,7 +264,7 @@ class OIDCClient:
             return self._jwks_cache
 
         except requests.RequestException as e:
-            log.error(f"Failed to fetch JWKS: {e}")
+            log.error("Failed to fetch JWKS: %s", e)
             raise
 
     def introspect_token(self, token: str) -> Dict[str, Any]:
@@ -295,9 +295,9 @@ class OIDCClient:
             response.raise_for_status()
             result = response.json()
 
-            log.debug(f"Token introspection result: active={result.get('active')}")
+            log.debug("Token introspection result: active=%s", result.get('active'))
             return result
 
         except requests.RequestException as e:
-            log.error(f"Failed to introspect token: {e}")
+            log.error("Failed to introspect token: %s", e)
             raise
