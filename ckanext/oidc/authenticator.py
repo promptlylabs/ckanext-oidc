@@ -26,8 +26,9 @@ class OIDCAuthenticator:
         self.groups_claim = get_oidc_config('groups_claim', 'groups')
         self.sysadmin_groups = get_oidc_config('sysadmin_groups', '').split(',')
         self.default_organization = get_oidc_config('default_organization')
+        # Default to False for security - require explicit enabling
         self.auto_provision_users = toolkit.asbool(
-            get_oidc_config('auto_provision_users', True)
+            get_oidc_config('auto_provision_users', False)
         )
 
     def provision_user(self, claims: Dict[str, Any], access_token: Optional[str] = None) -> Optional[model.User]:
@@ -41,8 +42,8 @@ class OIDCAuthenticator:
         Returns:
             User object or None if provisioning failed
         """
-        log.debug(f"Received OIDC claims: {claims}")
-        log.debug(f"Using username_claim: {self.username_claim}")
+        log.debug("Received OIDC claims: %s", claims)
+        log.debug("Using username_claim: %s", self.username_claim)
         username = self._get_username_from_claims(claims)
         email = claims.get(self.email_claim, '')
         fullname = claims.get(self.fullname_claim, '')
@@ -59,7 +60,7 @@ class OIDCAuthenticator:
         elif self.auto_provision_users:
             user = self._create_user(username, email, fullname, groups)
         else:
-            log.warning(f"User {username} not found and auto-provisioning is disabled")
+            log.warning("User %s not found and auto-provisioning is disabled", username)
             return None
 
         if user:
@@ -83,8 +84,8 @@ class OIDCAuthenticator:
         flask_session['ckan_user_id'] = user.id
         flask_session.permanent = True
 
-        log.info(f"User {user.name} logged in via OIDC")
-        log.debug(f"Session after login: g.user={getattr(g, 'user', None)}, g.userobj={getattr(g, 'userobj', None)}, session_user_id={flask_session.get('ckan_user_id')}")
+        log.info("User %s logged in via OIDC", user.name)
+        log.debug("Session after login: g.user=%s, g.userobj=%s, session_user_id=%s", getattr(g, 'user', None), getattr(g, 'userobj', None), flask_session.get('ckan_user_id'))
 
     def _get_username_from_claims(self, claims: Dict[str, Any]) -> Optional[str]:
         """
@@ -98,11 +99,11 @@ class OIDCAuthenticator:
             CKAN-compatible username (sanitized)
         """
         username = claims.get(self.username_claim)
-        log.debug(f"Raw username from {self.username_claim}: {username}")
+        log.debug("Raw username from %s: %s", self.username_claim, username)
         if not username:
             # Fallback when preferred claim is missing
             username = claims.get('sub')
-            log.debug(f"Fallback to sub claim: {username}")
+            log.debug("Fallback to sub claim: %s", username)
 
         if username:
             username = username.lower()
@@ -113,7 +114,7 @@ class OIDCAuthenticator:
             username = re.sub(r'^[_\-]+', '', username)
             username = username[:100]
 
-        log.debug(f"Final sanitized username: {username}")
+        log.debug("Final sanitized username: %s", username)
         return username
 
     def _get_user(self, username: str, email: str) -> Optional[model.User]:
@@ -164,12 +165,15 @@ class OIDCAuthenticator:
             user_dict = toolkit.get_action('user_create')(context, user_data)
 
             user = model.User.get(user_dict['id'])
-            log.info(f"Created new user: {username}")
+            log.info("Created new user: %s", username)
 
             return user
 
+        except toolkit.ValidationError as e:
+            log.exception("Validation error creating user %s", username)
+            return None
         except Exception as e:
-            log.error(f"Failed to create user {username}: {e}")
+            log.exception("Unexpected error creating user %s", username)
             return None
 
     def _update_user(self, user: model.User, email: str, fullname: str, groups: List[str]) -> model.User:
@@ -200,12 +204,15 @@ class OIDCAuthenticator:
             if update_needed:
                 context = {'ignore_auth': True, 'user': user.name}
                 toolkit.get_action('user_update')(context, user_data)
-                log.info(f"Updated user information for: {user.name}")
+                log.info("Updated user information for: %s", user.name)
 
             return user
 
+        except toolkit.ValidationError as e:
+            log.exception("Validation error updating user %s", user.name)
+            return user
         except Exception as e:
-            log.error(f"Failed to update user {user.name}: {e}")
+            log.exception("Unexpected error updating user %s", user.name)
             return user
 
     def _process_group_memberships(self, user: model.User, groups: List[str]) -> None:
@@ -235,10 +242,10 @@ class OIDCAuthenticator:
                         org_data = {
                             'name': org_name,
                             'title': group_name,
-                            'description': f'Organization from OIDC group: {group_name}'
+                            'description': 'Organization from OIDC group: %s' % group_name
                         }
                         org = toolkit.get_action('organization_create')(context, org_data)
-                        log.info(f"Created organization: {org_name}")
+                        log.info("Created organization: %s", org_name)
                     else:
                         continue
 
@@ -254,7 +261,7 @@ class OIDCAuthenticator:
                         'role': 'member'
                     }
                     toolkit.get_action('organization_member_create')(context, member_data)
-                    log.info(f"Added user {user.name} to organization {org_name}")
+                    log.info("Added user %s to organization %s", user.name, org_name)
 
             if self.default_organization:
                 try:
@@ -273,13 +280,16 @@ class OIDCAuthenticator:
                             'role': 'member'
                         }
                         toolkit.get_action('organization_member_create')(context, member_data)
-                        log.info(f"Added user {user.name} to default organization {self.default_organization}")
+                        log.info("Added user %s to default organization %s", user.name, self.default_organization)
 
                 except toolkit.ObjectNotFound:
-                    log.warning(f"Default organization {self.default_organization} not found")
+                    log.warning("Default organization %s not found", self.default_organization)
 
+        except (toolkit.ObjectNotFound, toolkit.ValidationError) as e:
+            log.exception("Error processing group memberships for user %s", user.name)
         except Exception as e:
-            log.error(f"Failed to process group memberships for user {user.name}: {e}")
+            log.exception("Unexpected error processing group memberships for user %s", user.name)
+            raise
 
     def _update_sysadmin_status(self, user: model.User, groups: List[str]) -> None:
         """
@@ -301,14 +311,15 @@ class OIDCAuthenticator:
                 user.sysadmin = True
                 model.Session.add(user)
                 model.Session.commit()
-                log.info(f"Granted sysadmin rights to user: {user.name}")
+                log.info("Granted sysadmin rights to user: %s", user.name)
             elif not should_be_sysadmin and user.sysadmin:
                 # Revoke if configured to sync sysadmin status with OIDC groups
                 if toolkit.asbool(get_oidc_config('revoke_sysadmin_on_missing_group', False)):
                     user.sysadmin = False
                     model.Session.add(user)
                     model.Session.commit()
-                    log.info(f"Revoked sysadmin rights from user: {user.name}")
+                    log.info("Revoked sysadmin rights from user: %s", user.name)
 
         except Exception as e:
-            log.error(f"Failed to update sysadmin status for user {user.name}: {e}")
+            log.exception("Failed to update sysadmin status for user %s", user.name)
+            raise

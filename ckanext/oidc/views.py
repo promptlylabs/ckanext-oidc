@@ -43,7 +43,7 @@ def login():
         return redirect(auth_url)
 
     except Exception as e:
-        log.error(f"Failed to initiate OIDC login: {e}")
+        log.error("Failed to initiate OIDC login: %s", e)
         h.flash_error(_('Failed to initiate SSO login. Please try again.'))
         return h.redirect_to('user.login')
 
@@ -61,7 +61,7 @@ def callback():
     error_description = request.args.get('error_description')
 
     if error:
-        log.error(f"OIDC callback error: {error} - {error_description}")
+        log.error("OIDC callback error: %s - %s", error, error_description)
         h.flash_error(_('Authentication failed: {}').format(error_description or error))
         return h.redirect_to('user.login')
 
@@ -109,12 +109,12 @@ def callback():
         h.flash_success(_('Successfully logged in via SSO'))
 
         redirect_target = came_from if came_from and came_from.startswith('/') else '/'
-        log.info(f"Redirecting user {user.name} to: {redirect_target}")
+        log.info("Redirecting user %s to: %s", user.name, redirect_target)
 
         return h.redirect_to(redirect_target)
 
     except Exception as e:
-        log.error(f"Failed to complete OIDC authentication: {e}")
+        log.error("Failed to complete OIDC authentication: %s", e)
         h.flash_error(_('Authentication failed. Please try again.'))
         return h.redirect_to('user.login')
 
@@ -139,7 +139,7 @@ def logout():
         if id_token:
             client = OIDCClient()
             site_url = toolkit.config.get('ckan.site_url', '').rstrip('/')
-            post_logout_redirect_uri = f"{site_url}/"
+            post_logout_redirect_uri = "%s/" % site_url
 
             logout_url = client.logout(id_token, post_logout_redirect_uri)
             log.info("Redirecting user to OIDC provider for logout")
@@ -149,7 +149,7 @@ def logout():
         return h.redirect_to('home.index')
 
     except Exception as e:
-        log.error(f"Error during OIDC logout: {e}")
+        log.error("Error during OIDC logout: %s", e)
         return h.redirect_to('user.logout')
 
 
@@ -181,5 +181,5 @@ def refresh_token():
         return toolkit.response.make_response({'success': True})
 
     except Exception as e:
-        log.error(f"Failed to refresh OIDC token: {e}")
+        log.error("Failed to refresh OIDC token: %s", e)
         return toolkit.abort(401)
