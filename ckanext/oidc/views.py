@@ -1,7 +1,7 @@
 """OIDC authentication views for login/callback/logout"""
 
 import logging
-from flask import Blueprint, redirect, request, session as flask_session
+from flask import Blueprint, redirect, request, session as flask_session, make_response
 
 import ckan.plugins.toolkit as toolkit
 import ckan.model as model
@@ -98,13 +98,37 @@ def callback():
             return h.redirect_to('user.login')
 
         # Keep tokens for refresh and logout
-        flask_session['oidc_tokens'] = {
+        oidc_tokens_data = {
             'access_token': tokens.get('access_token'),
             'id_token': tokens.get('id_token'),
             'refresh_token': tokens.get('refresh_token'),
         }
 
+        # Login user FIRST - this may regenerate the session
         authenticator.login_user(user)
+
+        # NOW store tokens in the new session AND in Redis by user ID
+        flask_session['oidc_tokens'] = oidc_tokens_data
+        flask_session['oidc_login'] = True
+        flask_session['oidc_id_token'] = tokens.get('id_token')
+        flask_session.modified = True
+        log.debug("Stored OIDC tokens in session after login_user for user: %s", user.name)
+
+        # Store tokens in Redis by user ID (survives session regeneration)
+        if toolkit.asbool(get_oidc_config('enable_backchannel_logout', True)):
+            try:
+                from .session_manager import OIDCSessionManager
+                session_manager = OIDCSessionManager()
+
+                # Store session mapping for backchannel logout
+                session_manager.store_session_mapping(flask_session, id_token_claims)
+
+                # Store tokens by user ID (persistent storage)
+                session_manager.store_user_tokens(user.id, oidc_tokens_data)
+                log.debug("Stored OIDC tokens in Redis for user: %s", user.id)
+            except Exception as e:
+                log.error("Failed to store session/user data: %s", e)
+                # Don't fail login
 
         h.flash_success(_('Successfully logged in via SSO'))
 
@@ -121,52 +145,13 @@ def callback():
 
 @oidc.route('/oidc/logout')
 def logout():
-    """Handle OIDC logout."""
-    if not is_oidc_enabled():
-        return h.redirect_to('user.logout')
+    """DEPRECATED: Redirect to standard CKAN logout.
 
-    # Check if OIDC logout is explicitly disabled
-    enable_logout = toolkit.asbool(get_oidc_config('enable_logout', True))
-    if not enable_logout:
-        log.debug("OIDC logout is disabled, using standard logout")
-        return h.redirect_to('user.logout')
-
-    try:
-        tokens = flask_session.get('oidc_tokens', {})
-        id_token = tokens.get('id_token')
-
-        # Clear OIDC tokens from session
-        flask_session.pop('oidc_tokens', None)
-
-        # Clear user from session
-        if g.user:
-            g.user = None
-            if 'user' in flask_session:
-                del flask_session['user']
-
-        # Check if we should logout from IdP (Keycloak)
-        logout_from_idp = toolkit.asbool(get_oidc_config('logout_from_idp', True))
-
-        if id_token and logout_from_idp:
-            client = OIDCClient()
-
-            # Get post-logout redirect URI from config or default to site URL
-            site_url = toolkit.config.get('ckan.site_url', '').rstrip('/')
-            post_logout_redirect_uri = get_oidc_config('post_logout_redirect_uri', '')
-            if not post_logout_redirect_uri:
-                post_logout_redirect_uri = "%s/" % site_url
-
-            logout_url = client.logout(id_token, post_logout_redirect_uri)
-            log.info("Redirecting user to OIDC provider for logout")
-            return redirect(logout_url)
-
-        # Local logout only (no IdP logout)
-        h.flash_success(_('Successfully logged out'))
-        return h.redirect_to('home.index')
-
-    except Exception as e:
-        log.error("Error during OIDC logout: %s", e)
-        return h.redirect_to('user.logout')
+    This endpoint is deprecated. Use /user/logout instead.
+    The IAuthenticator.logout() method now handles OIDC logout.
+    """
+    log.warning("Direct /oidc/logout is deprecated, use /user/logout")
+    return h.redirect_to('user.logout')
 
 
 @oidc.route('/oidc/refresh')
@@ -194,11 +179,13 @@ def refresh_token():
         }
 
         log.info("Successfully refreshed OIDC tokens")
-        return toolkit.response.make_response({'success': True})
+        return make_response({'success': True})
 
     except Exception as e:
         log.error("Failed to refresh OIDC token: %s", e)
         return toolkit.abort(401)
+
+
 def _validate_logout_token(claims: dict) -> str:
     """
     Validate logout token claims.
