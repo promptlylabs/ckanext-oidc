@@ -26,7 +26,7 @@ def get_oidc_config(key: str, default: Any = None) -> Any:
     # Priority: ENV > INI > default
     env_key = f'CKAN__CKANEXT__OIDC__{key.upper()}'
     env_value = os.environ.get(env_key)
-    if env_value is not None:
+    if env_value is not None and env_value != '':
         return env_value
 
     config_key = f'ckanext.oidc.{key}'
@@ -59,6 +59,7 @@ def get_oidc_endpoints() -> Dict[str, str]:
     custom_logout_endpoint = get_oidc_config('end_session_endpoint')
 
     return {
+        'issuer': base_url,
         'authorization': f"{oidc_base}/auth",
         'token': f"{oidc_base}/token",
         'userinfo': f"{oidc_base}/userinfo",
