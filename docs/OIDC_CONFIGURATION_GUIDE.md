@@ -34,10 +34,15 @@ This guide provides step-by-step instructions for configuring OIDC SSO authentic
 4. **Set Valid Redirect URIs**
    ```
    https://your-ckan-domain.com/oidc/callback
-   https://your-ckan-domain.com/oidc/logout
    ```
 
-5. **Configure Web Origins**
+5. **Set Valid Post Logout Redirect URIs** (for single logout support)
+   ```
+   https://your-ckan-domain.com/*
+   https://your-ckan-domain.com/
+   ```
+
+6. **Configure Web Origins**
    ```
    https://your-ckan-domain.com
    ```
@@ -106,9 +111,17 @@ CKAN__CKANEXT__OIDC__ALLOW_LOCAL_LOGIN=true
 CKAN__CKANEXT__OIDC__BUTTON_TEXT=Sign in with Keycloak
 CKAN__CKANEXT__OIDC__BUTTON_ICON=fa-key
 CKAN__CKANEXT__OIDC__BUTTON_POSITION=top
+
+# Logout Configuration (Security Enhancement)
+CKAN__CKANEXT__OIDC__ENABLE_LOGOUT=true
+CKAN__CKANEXT__OIDC__LOGOUT_FROM_IDP=true
+CKAN__CKANEXT__OIDC__POST_LOGOUT_REDIRECT_URI=
+# CKAN__CKANEXT__OIDC__END_SESSION_ENDPOINT=  # Optional: Override auto-discovered endpoint
 ```
 
 ### 2.2 Environment Variable Reference
+
+#### Core Configuration
 
 | Variable | Description | Example Value |
 |----------|-------------|---------------|
@@ -120,6 +133,17 @@ CKAN__CKANEXT__OIDC__BUTTON_POSITION=top
 | `USERNAME_CLAIM` | Token claim for username | `email` or `preferred_username` |
 | `GROUPS_CLAIM` | Token claim for user groups | `datalake_roles` |
 | `SYSADMIN_GROUPS` | Groups that grant admin rights | `DevOps/SRE Admin,Admins` |
+
+#### Logout Configuration (Security Enhancement)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_LOGOUT` | `true` | Enable/disable OIDC logout functionality. Set to `false` to use standard CKAN logout only. |
+| `LOGOUT_FROM_IDP` | `true` | When `true`, logs out from Keycloak (IdP) ensuring complete session termination. When `false`, only clears local CKAN session. |
+| `POST_LOGOUT_REDIRECT_URI` | `{ckan.site_url}/` | URL to redirect to after logout from Keycloak. Defaults to CKAN homepage. |
+| `END_SESSION_ENDPOINT` | Auto-discovered | Optional: Override the OIDC end_session_endpoint. Usually auto-discovered from provider. |
+
+**Security Recommendation**: Keep `LOGOUT_FROM_IDP=true` for production to ensure users are fully logged out from the identity provider, preventing unauthorized access via active SSO sessions.
 
 ## Step 3: CKAN Plugin Configuration
 
@@ -307,6 +331,49 @@ CKAN__CKANEXT__OIDC__SYSADMIN_GROUPS=sysadmin,admin
 CKAN__CKANEXT__OIDC__AUTO_PROVISION_USERS=true
 CKAN__CKANEXT__OIDC__AUTO_CREATE_ORGANIZATIONS=false
 ```
+
+## Testing Logout Functionality
+
+### Single Sign-Out (SSO) Flow
+
+1. **Login via OIDC**
+   - Navigate to CKAN login page
+   - Click "Sign in with Keycloak"
+   - Authenticate with Keycloak
+   - Verify successful login
+
+2. **Test Single Logout**
+   - Click logout in CKAN
+   - Should redirect to Keycloak logout page
+   - Should redirect back to CKAN homepage
+   - Verify session cleared in CKAN
+   - Verify Keycloak session terminated (try accessing Keycloak admin - should require re-login)
+
+3. **Verify Local Session Cleared**
+   - Open browser DevTools → Application → Cookies
+   - Verify CKAN session cookies are removed
+   - Verify no OIDC tokens remain in session storage
+
+4. **Test Logout Behavior**
+   ```bash
+   # Test with IdP logout (default)
+   CKAN__CKANEXT__OIDC__LOGOUT_FROM_IDP=true
+   # Result: Logs out from both CKAN and Keycloak
+
+   # Test without IdP logout
+   CKAN__CKANEXT__OIDC__LOGOUT_FROM_IDP=false
+   # Result: Only logs out from CKAN, Keycloak session remains active
+   ```
+
+### Issue: User Not Fully Logged Out
+
+**Cause**: Single logout not configured properly
+
+**Solutions**:
+1. Verify `LOGOUT_FROM_IDP=true` is set
+2. Check Keycloak "Valid Post Logout Redirect URIs" includes CKAN URLs
+3. Verify logout endpoint accessible (check logs for errors)
+4. Ensure `id_token` is available in session during logout
 
 ## Validation Checklist
 

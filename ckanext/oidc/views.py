@@ -125,26 +125,42 @@ def logout():
     if not is_oidc_enabled():
         return h.redirect_to('user.logout')
 
+    # Check if OIDC logout is explicitly disabled
+    enable_logout = toolkit.asbool(get_oidc_config('enable_logout', True))
+    if not enable_logout:
+        log.debug("OIDC logout is disabled, using standard logout")
+        return h.redirect_to('user.logout')
+
     try:
         tokens = flask_session.get('oidc_tokens', {})
         id_token = tokens.get('id_token')
 
+        # Clear OIDC tokens from session
         flask_session.pop('oidc_tokens', None)
 
+        # Clear user from session
         if g.user:
             g.user = None
             if 'user' in flask_session:
                 del flask_session['user']
 
-        if id_token:
+        # Check if we should logout from IdP (Keycloak)
+        logout_from_idp = toolkit.asbool(get_oidc_config('logout_from_idp', True))
+
+        if id_token and logout_from_idp:
             client = OIDCClient()
+
+            # Get post-logout redirect URI from config or default to site URL
             site_url = toolkit.config.get('ckan.site_url', '').rstrip('/')
-            post_logout_redirect_uri = "%s/" % site_url
+            post_logout_redirect_uri = get_oidc_config('post_logout_redirect_uri', '')
+            if not post_logout_redirect_uri:
+                post_logout_redirect_uri = "%s/" % site_url
 
             logout_url = client.logout(id_token, post_logout_redirect_uri)
             log.info("Redirecting user to OIDC provider for logout")
             return redirect(logout_url)
 
+        # Local logout only (no IdP logout)
         h.flash_success(_('Successfully logged out'))
         return h.redirect_to('home.index')
 

@@ -54,11 +54,15 @@ def get_oidc_endpoints() -> Dict[str, str]:
         return {}
 
     oidc_base = f"{base_url}/protocol/openid-connect"
+
+    # Allow custom end_session_endpoint to be configured
+    custom_logout_endpoint = get_oidc_config('end_session_endpoint')
+
     return {
         'authorization': f"{oidc_base}/auth",
         'token': f"{oidc_base}/token",
         'userinfo': f"{oidc_base}/userinfo",
-        'logout': f"{oidc_base}/logout",
+        'logout': custom_logout_endpoint or f"{oidc_base}/logout",
         'jwks': f"{oidc_base}/certs",
         'introspection': f"{oidc_base}/token/introspect",
     }
