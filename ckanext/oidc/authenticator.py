@@ -191,10 +191,13 @@ class OIDCAuthenticator:
         """
         try:
             update_needed = False
-            user_data = {'id': user.id}
+            # Always include email in user_data (required by CKAN's user_update)
+            user_data = {
+                'id': user.id,
+                'email': email or user.email  # Use new email or keep existing
+            }
 
             if email and user.email != email:
-                user_data['email'] = email
                 update_needed = True
 
             if fullname and user.fullname != fullname:
