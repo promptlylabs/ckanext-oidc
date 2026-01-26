@@ -183,6 +183,70 @@ class OIDCClient:
             log.error("Failed to decode ID token: %s", e)
             raise
 
+    def decode_logout_token(self, logout_token: str) -> Dict[str, Any]:
+        """
+        Decode and validate logout token for backchannel logout.
+
+        Args:
+            logout_token: JWT logout token from OIDC provider
+
+        Returns:
+            Decoded token claims
+
+        Raises:
+            ValueError: If token validation fails
+            JoseError: If token decoding fails
+        """
+        try:
+            jwks = self._get_jwks()
+
+            # Decode the token
+            claims = jwt.decode(logout_token, jwks)
+
+            # Validate required claims for logout token
+            required_claims = ['iss', 'aud', 'iat', 'events']
+            for claim in required_claims:
+                if claim not in claims:
+                    raise ValueError(f"Missing required claim: {claim}")
+
+            # Validate issuer matches expected issuer
+            expected_issuer = self.endpoints.get('issuer')
+            if expected_issuer and claims['iss'] != expected_issuer:
+                raise ValueError(f"Invalid issuer: {claims['iss']}")
+
+            # Validate audience contains client_id
+            aud = claims['aud']
+            if isinstance(aud, list):
+                if self.client_id not in aud:
+                    raise ValueError(f"Client ID not in audience: {aud}")
+            else:
+                if aud != self.client_id:
+                    raise ValueError(f"Invalid audience: {aud}")
+
+            # Validate events claim contains backchannel-logout event
+            events = claims.get('events', {})
+            if not isinstance(events, dict):
+                raise ValueError("Events claim must be an object")
+
+            backchannel_event_key = 'http://schemas.openid.net/event/backchannel-logout'
+            if backchannel_event_key not in events:
+                raise ValueError("Events claim missing backchannel-logout event")
+
+            # Logout tokens MUST NOT have a nonce claim
+            if 'nonce' in claims:
+                raise ValueError("Logout token must not contain nonce claim")
+
+            # Must have either 'sub' or 'sid' (or both)
+            if 'sub' not in claims and 'sid' not in claims:
+                raise ValueError("Logout token must contain 'sub' or 'sid' claim")
+
+            log.debug("Successfully validated logout token")
+            return claims
+
+        except JoseError as e:
+            log.error("Failed to decode logout token: %s", e)
+            raise
+
     def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
         """
         Refresh access token using refresh token.
@@ -235,6 +299,7 @@ class OIDCClient:
         params = {
             'id_token_hint': id_token,
             'post_logout_redirect_uri': post_logout_redirect_uri,
+            'client_id': self.client_id,
         }
 
         logout_url = "%s?%s" % (logout_endpoint, urlencode(params))
