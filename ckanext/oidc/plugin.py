@@ -5,13 +5,14 @@ from typing import Optional
 from flask import Response, session as flask_session
 from werkzeug.utils import redirect
 
-from ckan.common import logout_user
+from ckan.common import logout_user, current_user
 
 from .utils import (
     is_oidc_enabled,
     validate_oidc_config,
     get_oidc_config,
 )
+from .session_manager import OIDCSessionManager
 
 log = logging.getLogger(__name__)
 
@@ -83,9 +84,6 @@ class OidcPlugin(plugins.SingletonPlugin):
         # If tokens not in session, try to get from Redis by user ID
         if not oidc_tokens and toolkit.asbool(get_oidc_config('enable_backchannel_logout', True)):
             try:
-                from .session_manager import OIDCSessionManager
-                from ckan.common import current_user
-
                 if current_user and hasattr(current_user, 'id'):
                     session_manager = OIDCSessionManager()
                     oidc_tokens = session_manager.get_user_tokens(current_user.id)
@@ -111,9 +109,6 @@ class OidcPlugin(plugins.SingletonPlugin):
         # Clean up session mapping and user tokens for backchannel logout
         if toolkit.asbool(get_oidc_config('enable_backchannel_logout', True)):
             try:
-                from .session_manager import OIDCSessionManager
-                from ckan.common import current_user
-
                 session_manager = OIDCSessionManager()
                 session_manager.remove_session_mapping(flask_session)
                 log.debug("Removed OIDC session mapping")
